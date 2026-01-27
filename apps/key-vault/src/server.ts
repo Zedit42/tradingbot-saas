@@ -155,8 +155,9 @@ app.get('/keys', authMiddleware, (req: AuthRequest, res) => {
 // Delete a key
 app.delete('/keys/:keyId', authMiddleware, (req: AuthRequest, res) => {
   try {
-    const ipAddress = req.ip || req.headers['x-forwarded-for'] as string || 'unknown';
-    const deleted = vault.deleteKey(req.params.keyId, req.userId!, ipAddress);
+    const ipAddress = req.ip || (Array.isArray(req.headers['x-forwarded-for']) ? req.headers['x-forwarded-for'][0] : req.headers['x-forwarded-for']) || 'unknown';
+    const keyId = Array.isArray(req.params.keyId) ? req.params.keyId[0] : req.params.keyId;
+    const deleted = vault.deleteKey(keyId, req.userId!, ipAddress);
     
     if (deleted) {
       res.json({ success: true });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, LayoutDashboard, Wallet, Settings, LogOut } from "lucide-react";
+import { Bot, LayoutDashboard, Wallet, Settings, LogOut, Bell, Trophy, Send } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
@@ -45,6 +45,29 @@ export default async function DashboardLayout({
             <Wallet className="h-5 w-5" />
             Wallets
           </Link>
+          
+          {/* New Features */}
+          <div className="my-4 border-t border-gray-800" />
+          
+          <Link
+            href="/dashboard/alerts"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"
+          >
+            <Bell className="h-5 w-5" />
+            Price Alerts
+            <span className="ml-auto text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">New</span>
+          </Link>
+          <Link
+            href="/dashboard/leaderboard"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"
+          >
+            <Trophy className="h-5 w-5" />
+            Leaderboard
+            <span className="ml-auto text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">🔥</span>
+          </Link>
+          
+          <div className="my-4 border-t border-gray-800" />
+          
           <Link
             href="/dashboard/settings"
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition"

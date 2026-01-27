@@ -32,6 +32,8 @@ model User {
   wallets       Wallet[]
   bots          Bot[]
   trades        Trade[]
+  alerts        Alert[]
+  profile       UserProfile?
 }
 
 model Account {
@@ -149,4 +151,65 @@ model Trade {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
   bot       Bot?     @relation(fields: [botId], references: [id], onDelete: SetNull)
+}
+
+// ============================================================================
+// PRICE ALERTS
+// ============================================================================
+
+model Alert {
+  id        String   @id @default(cuid())
+  userId    String
+  
+  coin      String   // BTC, ETH, SOL, etc.
+  condition String   // above, below
+  price     Float    // Target price
+  
+  // Notification channels
+  notifyTelegram Boolean @default(true)
+  notifyEmail    Boolean @default(false)
+  
+  triggered   Boolean  @default(false)
+  triggeredAt DateTime?
+  
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// USER PROFILE (Leaderboard & Telegram)
+// ============================================================================
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  
+  // Display
+  displayName   String?
+  avatarUrl     String?
+  isPublic      Boolean @default(true)  // Show on leaderboard
+  
+  // Telegram Integration
+  telegramId    String?  @unique
+  telegramUsername String?
+  telegramVerified Boolean @default(false)
+  
+  // Leaderboard Stats (cached)
+  totalPnl      Float   @default(0)
+  totalTrades   Int     @default(0)
+  winRate       Float   @default(0)
+  rank          Int?
+  
+  // Streak & Achievements
+  currentStreak Int     @default(0)
+  bestStreak    Int     @default(0)
+  badges        String  @default("[]") // JSON array of badge IDs
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
