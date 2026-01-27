@@ -1,7 +1,14 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, Zap, Shield, TrendingUp, Wallet, BarChart3 } from "lucide-react";
+
+// Dynamic import for 3D scene (client-side only)
+const HeroScene = dynamic(() => import("@/components/3d/hero-scene"), {
+  ssr: false,
+  loading: () => <div className="absolute inset-0 bg-gradient-to-b from-green-500/5 to-transparent" />,
+});
 
 export default function LandingPage() {
   return (
@@ -32,9 +39,12 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="max-w-7xl mx-auto text-center">
+      {/* Hero with 3D Scene */}
+      <section className="relative pt-32 pb-20 px-4 min-h-screen flex items-center">
+        {/* 3D Background - Pass modelUrl prop when you have a custom model */}
+        <HeroScene />
+        
+        <div className="max-w-7xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm mb-8">
             <Zap className="h-4 w-4" />
             Now with Temporal Arbitrage - 98% Win Rate
