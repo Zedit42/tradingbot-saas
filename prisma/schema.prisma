@@ -180,6 +180,36 @@ model Alert {
 }
 
 // ============================================================================
+// WAITLIST
+// ============================================================================
+
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  
+  // Referral tracking
+  referralCode  String   @unique @default(cuid())
+  referredBy    String?  // referralCode of referrer
+  referralCount Int      @default(0)
+  
+  // Priority (higher = earlier access)
+  priority   Int      @default(0)
+  
+  // Status
+  status     String   @default("waiting") // waiting, invited, converted
+  invitedAt  DateTime?
+  convertedAt DateTime?
+  
+  // Metadata
+  source     String?  // landing, twitter, producthunt, etc.
+  ipAddress  String?
+  userAgent  String?
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ============================================================================
 // USER PROFILE (Leaderboard & Telegram)
 // ============================================================================
 

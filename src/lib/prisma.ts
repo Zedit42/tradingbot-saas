@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
 import path from "path";
 
 const globalForPrisma = globalThis as unknown as {
@@ -8,15 +7,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Absolute path to SQLite DB
-const dbPath = path.join(process.cwd(), "dev.db");
+const dbPath = path.join(process.cwd(), "prisma", "dev.db");
 
-// Create libSQL client for SQLite
-const libsql = createClient({
+// Create adapter with URL config
+const adapter = new PrismaLibSql({
   url: `file:${dbPath}`,
 });
-
-// Create adapter
-const adapter = new PrismaLibSql(libsql);
 
 // Create Prisma client with adapter
 export const prisma =

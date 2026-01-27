@@ -203,13 +203,14 @@ export class KeyVault {
     try {
       // Import Solana libraries dynamically
       const { Keypair } = await import('@solana/web3.js');
+      const nacl = await import('tweetnacl');
       
       // Create keypair from secret key
       const keypair = Keypair.fromSecretKey(privateKey);
       
-      // Decode and sign transaction
+      // Decode and sign transaction using nacl
       const txBuffer = Buffer.from(params.transaction, 'base64');
-      const signature = keypair.sign(txBuffer);
+      const signature = nacl.sign.detached(txBuffer, keypair.secretKey);
 
       // Audit log
       this.log({

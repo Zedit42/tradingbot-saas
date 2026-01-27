@@ -1,9 +1,29 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-01-27.acacia",
-  typescript: true,
-});
+// Lazy initialization to avoid build errors
+let _stripe: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error("STRIPE_SECRET_KEY is not set");
+    }
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2025-12-15.clover",
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
+
+// Legacy export for backward compatibility
+export const stripe = {
+  get checkout() { return getStripe().checkout; },
+  get billingPortal() { return getStripe().billingPortal; },
+  get webhooks() { return getStripe().webhooks; },
+  get customers() { return getStripe().customers; },
+  get subscriptions() { return getStripe().subscriptions; },
+};
 
 // Price IDs - Create these in Stripe Dashboard
 export const PLANS = {
