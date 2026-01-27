@@ -1,0 +1,243 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============================================
+  # SECURITY CHECKS
+  # ============================================
+  security:
+    name: 🔒 Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for hardcoded secrets
+        run: |
+          echo "🔍 Scanning for hardcoded secrets..."
+          
+          # Patterns to detect
+          PATTERNS=(
+            'sk-[a-zA-Z0-9]{20,}'           # OpenAI keys
+            'sk_live_[a-zA-Z0-9]+'          # Stripe live keys
+            'ghp_[a-zA-Z0-9]{36}'           # GitHub PAT
+            'AKIA[0-9A-Z]{16}'              # AWS Access Key
+            'password\s*=\s*["\x27][^"\x27]+["\x27]'  # Hardcoded passwords
+            'secret\s*=\s*["\x27][^"\x27]+["\x27]'    # Hardcoded secrets
+            'apikey\s*=\s*["\x27][^"\x27]+["\x27]'    # Hardcoded API keys
+          )
+          
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -rEn "$pattern" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" src/ 2>/dev/null | grep -v "process.env" | grep -v "example" | grep -v ".test."; then
+              echo "⚠️ Potential secret found matching: $pattern"
+              FOUND=1
+            fi
+          done
+          
+          if [ $FOUND -eq 1 ]; then
+            echo "❌ Security check failed: Potential hardcoded secrets detected"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Check for SQL/NoSQL injection vulnerabilities
+        run: |
+          echo "🔍 Scanning for injection vulnerabilities..."
+          
+          # Check for raw SQL queries without parameterization
+          if grep -rEn 'prisma\.\$queryRaw\s*`[^`]*\$\{' --include="*.ts" --include="*.tsx" src/ 2>/dev/null; then
+            echo "❌ Potential SQL injection: Use parameterized queries with Prisma.sql"
+            exit 1
+          fi
+          
+          # Check for string concatenation in queries
+          if grep -rEn '(WHERE|AND|OR)\s*.*\+\s*(req\.|params\.|query\.|body\.)' --include="*.ts" --include="*.tsx" src/ 2>/dev/null; then
+            echo "❌ Potential SQL injection: Direct string concatenation in query"
+            exit 1
+          fi
+          
+          # Check for eval() usage
+          if grep -rEn '\beval\s*\(' --include="*.ts" --include="*.tsx" src/ 2>/dev/null; then
+            echo "❌ Security risk: eval() usage detected"
+            exit 1
+          fi
+          
+          # Check for innerHTML without sanitization
+          if grep -rEn 'dangerouslySetInnerHTML' --include="*.tsx" src/ 2>/dev/null | grep -v "sanitize"; then
+            echo "⚠️ Warning: dangerouslySetInnerHTML found - ensure content is sanitized"
+          fi
+          
+          echo "✅ No injection vulnerabilities found"
+
+      - name: Check for XSS vulnerabilities
+        run: |
+          echo "🔍 Scanning for XSS vulnerabilities..."
+          
+          # Check for document.write
+          if grep -rEn 'document\.write\s*\(' --include="*.ts" --include="*.tsx" src/ 2>/dev/null; then
+            echo "❌ XSS risk: document.write() usage detected"
+            exit 1
+          fi
+          
+          # Check for innerHTML assignment
+          if grep -rEn '\.innerHTML\s*=' --include="*.ts" --include="*.tsx" src/ 2>/dev/null; then
+            echo "❌ XSS risk: Direct innerHTML assignment detected"
+            exit 1
+          fi
+          
+          echo "✅ No XSS vulnerabilities found"
+
+  # ============================================
+  # TYPESCRIPT CHECKS
+  # ============================================
+  typescript:
+    name: 📘 TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: TypeScript strict check
+        run: npx tsc --noEmit --strict
+      
+      - name: Check for 'any' type usage
+        run: |
+          echo "🔍 Checking for 'any' type usage..."
+          
+          # Count any usages (excluding type declarations and comments)
+          ANY_COUNT=$(grep -rE ':\s*any\b|<any>|as\s+any' --include="*.ts" --include="*.tsx" src/ 2>/dev/null | grep -v "// @ts-" | grep -v "eslint-disable" | wc -l)
+          
+          if [ "$ANY_COUNT" -gt 5 ]; then
+            echo "❌ Too many 'any' types found ($ANY_COUNT). Maximum allowed: 5"
+            grep -rEn ':\s*any\b|<any>|as\s+any' --include="*.ts" --include="*.tsx" src/ 2>/dev/null | grep -v "// @ts-" | head -20
+            exit 1
+          fi
+          
+          echo "✅ 'any' usage within limits ($ANY_COUNT/5)"
+
+  # ============================================
+  # CODE QUALITY CHECKS
+  # ============================================
+  quality:
+    name: ✨ Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: ESLint check
+        run: npm run lint
+      
+      - name: Check file structure
+        run: |
+          echo "🔍 Validating file structure..."
+          
+          # Check that components are properly organized
+          if find src/app -name "*.tsx" -type f | xargs grep -l "^export default function" 2>/dev/null | while read file; do
+            BASENAME=$(basename "$file" .tsx)
+            if [[ "$BASENAME" != "page" && "$BASENAME" != "layout" && "$BASENAME" != "loading" && "$BASENAME" != "error" && "$BASENAME" != "not-found" ]]; then
+              # Component files should be in components folder or be page/layout files
+              if [[ "$file" != *"/components/"* ]]; then
+                echo "⚠️ Component $file should be in a components folder"
+              fi
+            fi
+          done; then
+            echo "✅ File structure looks good"
+          fi
+          
+          # Check for barrel exports in components
+          if [ -d "src/components" ]; then
+            if [ ! -f "src/components/index.ts" ] && [ "$(find src/components -name '*.tsx' | wc -l)" -gt 5 ]; then
+              echo "⚠️ Consider adding barrel exports (index.ts) in src/components"
+            fi
+          fi
+          
+          echo "✅ File structure validation complete"
+      
+      - name: Check component size
+        run: |
+          echo "🔍 Checking component sizes..."
+          
+          # Flag components over 300 lines
+          find src -name "*.tsx" -type f | while read file; do
+            LINES=$(wc -l < "$file")
+            if [ "$LINES" -gt 300 ]; then
+              echo "⚠️ $file has $LINES lines - consider splitting into smaller components"
+            fi
+          done
+          
+          echo "✅ Component size check complete"
+
+  # ============================================
+  # BUILD CHECK
+  # ============================================
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    needs: [security, typescript, quality]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate Prisma client
+        run: npx prisma generate
+      
+      - name: Build Next.js
+        run: npm run build
+        env:
+          # Mock env vars for build
+          DATABASE_URL: "file:./dev.db"
+          AUTH_SECRET: "mock-secret-for-build"
+          NEXTAUTH_URL: "http://localhost:3000"
+
+  # ============================================
+  # AUTO-MERGE (if all checks pass)
+  # ============================================
+  auto-merge:
+    name: 🤖 Auto Merge
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.actor == 'Zedit42' || github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Auto-merge PR
+        uses: pascalgn/automerge-action@v0.16.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_LABELS: ""
+          MERGE_METHOD: "squash"
+          MERGE_COMMIT_MESSAGE: "pull-request-title"
+          MERGE_DELETE_BRANCH: "true"
