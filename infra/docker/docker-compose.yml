@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # KEY VAULT - Isolated secure key storage
+  # ============================================================================
+  key-vault:
+    build:
+      context: ../../apps/key-vault
+      dockerfile: ../../infra/docker/Dockerfile.key-vault
+    ports:
+      - "127.0.0.1:4000:4000"  # ONLY localhost, never expose publicly
+    environment:
+      - KEY_VAULT_PORT=4000
+      - KEY_VAULT_MASTER_KEY=${KEY_VAULT_MASTER_KEY}
+      - KEY_VAULT_JWT_SECRET=${KEY_VAULT_JWT_SECRET}
+      - KEY_VAULT_DB_PATH=/data/vault.db
+      - KEY_VAULT_ALLOWED_ORIGINS=http://localhost:3000,http://web:3000
+    volumes:
+      - vault-data:/data
+    restart: unless-stopped
+    networks:
+      - internal
+    # Security: read-only root filesystem, no new privileges
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # ============================================================================
+  # WEB APP - Main Next.js application
+  # ============================================================================
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=${AUTH_URL}
+      - KEY_VAULT_URL=http://key-vault:4000
+      - KEY_VAULT_JWT_SECRET=${KEY_VAULT_JWT_SECRET}
+    depends_on:
+      - key-vault
+    restart: unless-stopped
+    networks:
+      - internal
+      - external
+
+volumes:
+  vault-data:
+    driver: local
+
+networks:
+  internal:
+    driver: bridge
+    internal: true  # No external access
+  external:
+    driver: bridge
