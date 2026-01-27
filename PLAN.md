@@ -17,11 +17,20 @@ Kullanıcı wallet bağlar, strateji seçer, bot çalışır.
 - **Hosting**: Vercel (free tier başlangıç)
 - **Bot Runtime**: Modal.com / Railway (background jobs)
 
-## 📦 Botlar (Mevcut)
+## 📦 Botlar (7 Aktif)
+
+### 🎯 Trading Botları
 1. **Polymarket Auto** - Temporal arbitrage, prediction markets
-2. **Hyperliquid Perps** - Futures trading, leverage
-3. **Solana Memecoin** - Auto-trade Solana tokens
-4. **X Signal Tracker** - Twitter'dan sinyal çek
+2. **Hyperliquid Perps** - Futures trading, leverage, short/long
+3. **Solana Memecoin** - Auto-trade Solana meme tokens (dip buy + momentum)
+
+### 📊 Strateji Botları
+4. **Grid Bot** - Range trading, otomatik grid alım/satım
+5. **DCA Bot** - Dollar cost averaging, düzenli alım
+6. **Funding Farmer** - Funding rate arbitrage, delta-neutral
+
+### 🐋 Sinyal Botları
+7. **Whale Tracker** - $100k+ wallet hareketleri takip + auto-trade
 
 ## 🚀 MVP Features (v0.1 - 1 hafta)
 - [ ] Landing page

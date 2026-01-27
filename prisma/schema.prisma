@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
@@ -101,7 +102,7 @@ model Bot {
   userId    String
   walletId  String
   
-  type      String   // polymarket, hyperliquid, solana
+  type      String   // polymarket, hyperliquid, solana, grid, dca, funding, whale
   name      String
   status    String   @default("stopped") // stopped, running, paused
   

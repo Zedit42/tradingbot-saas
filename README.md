@@ -59,7 +59,7 @@ Month 6: 300 users × $40 avg = $12,000
 - **Database**: Prisma + SQLite (dev) / PostgreSQL (prod)
 - **Payments**: Stripe
 - **Wallet**: wagmi + viem
-- **Bots**: Python (Polymarket, Hyperliquid, Solana)
+- **Bots**: Python (7 bots: Polymarket, Hyperliquid, Solana, Grid, DCA, Funding Farmer, Whale Tracker)
 
 ## 📁 Project Structure
 

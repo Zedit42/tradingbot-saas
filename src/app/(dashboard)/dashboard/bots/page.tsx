@@ -12,10 +12,14 @@ import {
   Settings, 
   BarChart3,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Grid3X3,
+  PiggyBank,
+  Percent,
+  Fish
 } from "lucide-react";
 
-type BotType = "polymarket" | "hyperliquid" | "solana";
+type BotType = "polymarket" | "hyperliquid" | "solana" | "grid" | "dca" | "funding" | "whale";
 
 interface BotConfig {
   id: BotType;
@@ -77,6 +81,66 @@ const bots: BotConfig[] = [
     ],
     status: "stopped",
     stats: { trades: 0, pnl: 0, winRate: 0 }
+  },
+  {
+    id: "grid",
+    name: "Grid Bot",
+    description: "Automated grid trading for sideways markets",
+    icon: Grid3X3,
+    color: "orange",
+    features: [
+      "Range-based Trading",
+      "Auto Grid Placement",
+      "Multi-pair Support",
+      "Profit Compounding"
+    ],
+    status: "stopped",
+    stats: { trades: 0, pnl: 0, winRate: 0 }
+  },
+  {
+    id: "dca",
+    name: "DCA Bot",
+    description: "Dollar cost averaging with smart timing",
+    icon: PiggyBank,
+    color: "pink",
+    features: [
+      "Scheduled Buys",
+      "Dip Detection",
+      "Multi-asset Support",
+      "Long-term Growth"
+    ],
+    status: "stopped",
+    stats: { trades: 0, pnl: 0, winRate: 0 }
+  },
+  {
+    id: "funding",
+    name: "Funding Farmer",
+    description: "Delta-neutral funding rate arbitrage",
+    icon: Percent,
+    color: "cyan",
+    features: [
+      "Funding Rate Tracking",
+      "Delta-neutral Positions",
+      "Auto Rebalancing",
+      "Multi-exchange Support"
+    ],
+    status: "stopped",
+    stats: { trades: 0, pnl: 0, winRate: 0 }
+  },
+  {
+    id: "whale",
+    name: "Whale Tracker",
+    description: "Follow smart money with auto-trade signals",
+    icon: Fish,
+    color: "indigo",
+    features: [
+      "$100k+ Movement Detection",
+      "Auto-trade on Signals",
+      "Multi-wallet Tracking",
+      "Risk Analysis"
+    ],
+    status: "stopped",
+    stats: { trades: 0, pnl: 0, winRate: 0 }
   }
 ];
 
@@ -85,7 +149,11 @@ export default function BotsPage() {
   const [botStatuses, setBotStatuses] = useState<Record<BotType, "stopped" | "running" | "error">>({
     polymarket: "stopped",
     hyperliquid: "stopped",
-    solana: "stopped"
+    solana: "stopped",
+    grid: "stopped",
+    dca: "stopped",
+    funding: "stopped",
+    whale: "stopped"
   });
 
   const toggleBot = (botId: BotType) => {

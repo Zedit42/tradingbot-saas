@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
+    "@libsql/client": "^0.17.0",
+    "@prisma/adapter-libsql": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@react-three/drei": "^10.7.7",

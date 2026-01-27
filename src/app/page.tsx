@@ -1,14 +1,19 @@
+"use client";
+
 import Link from "next/link";
-import dynamic from "next/dynamic";
+// import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, Zap, Shield, TrendingUp, Wallet, BarChart3 } from "lucide-react";
 
-// Dynamic import for 3D scene (client-side only)
-const HeroScene = dynamic(() => import("@/components/3d/hero-scene"), {
-  ssr: false,
-  loading: () => <div className="absolute inset-0 bg-gradient-to-b from-green-500/5 to-transparent" />,
-});
+// Simple animated background (3D scene disabled temporarily)
+const HeroBackground = () => (
+  <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 bg-gradient-to-b from-green-500/10 via-transparent to-transparent" />
+    <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-green-500/20 rounded-full blur-3xl animate-pulse" />
+    <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald-500/15 rounded-full blur-3xl animate-pulse delay-1000" />
+  </div>
+);
 
 export default function LandingPage() {
   return (
@@ -41,8 +46,8 @@ export default function LandingPage() {
 
       {/* Hero with 3D Scene */}
       <section className="relative pt-32 pb-20 px-4 min-h-screen flex items-center">
-        {/* 3D Background - Pass modelUrl prop when you have a custom model */}
-        <HeroScene />
+        {/* Animated Background */}
+        <HeroBackground />
         
         <div className="max-w-7xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm mb-8">
