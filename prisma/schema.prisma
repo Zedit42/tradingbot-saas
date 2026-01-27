@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================================
+// AUTH (NextAuth)
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  
+  // Subscription
+  plan          String    @default("free") // free, pro, elite
+  stripeCustomerId String?
+  stripeSubscriptionId String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  wallets       Wallet[]
+  bots          Bot[]
+  trades        Trade[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// WALLETS
+// ============================================================================
+
+model Wallet {
+  id        String   @id @default(cuid())
+  userId    String
+  address   String
+  chain     String   // evm, solana
+  label     String?
+  
+  // Encrypted private key (optional - for managed wallets)
+  encryptedKey String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bots      Bot[]
+  trades    Trade[]
+  
+  @@unique([userId, address])
+}
+
+// ============================================================================
+// BOTS
+// ============================================================================
+
+model Bot {
+  id        String   @id @default(cuid())
+  userId    String
+  walletId  String
+  
+  type      String   // polymarket, hyperliquid, solana
+  name      String
+  status    String   @default("stopped") // stopped, running, paused
+  
+  // Bot config (JSON)
+  config    String   @default("{}")
+  
+  // Stats
+  totalTrades   Int      @default(0)
+  totalPnl      Float    @default(0)
+  winRate       Float    @default(0)
+  
+  lastRunAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  trades    Trade[]
+}
+
+// ============================================================================
+// TRADES
+// ============================================================================
+
+model Trade {
+  id        String   @id @default(cuid())
+  userId    String
+  walletId  String
+  botId     String?
+  
+  type      String   // buy, sell, long, short
+  market    String   // BTC-PERP, polymarket-slug, etc.
+  amount    Float
+  price     Float
+  
+  pnl       Float?
+  status    String   @default("pending") // pending, filled, cancelled
+  
+  txHash    String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  bot       Bot?     @relation(fields: [botId], references: [id], onDelete: SetNull)
+}
