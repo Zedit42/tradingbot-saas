@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TradingBot Pro - SaaS
 
-## Getting Started
+Automated crypto trading bots as a service.
 
-First, run the development server:
+## 🚀 Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Install dependencies
+pnpm install
+
+# Setup database
+npx prisma db push
+
+# Run dev server
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 💳 Stripe Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Create account at [stripe.com](https://stripe.com)
+2. Go to Dashboard → Products → Create Product
+3. Create two products:
+   - **Pro Plan**: $29/month recurring
+   - **Elite Plan**: $99/month recurring
+4. Copy the Price IDs to `.env`
+5. Setup webhook:
+   - Stripe Dashboard → Webhooks → Add endpoint
+   - URL: `https://yourdomain.com/api/stripe/webhook`
+   - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+   - Copy webhook secret to `.env`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📈 Monetization Strategy
 
-## Learn More
+### Pricing Tiers
+| Plan | Price | Target |
+|------|-------|--------|
+| Free | $0 | Paper trading, lead gen |
+| Pro | $29/mo | Serious traders |
+| Elite | $99/mo | Power users |
 
-To learn more about Next.js, take a look at the following resources:
+### Revenue Projections
+```
+Month 1: 20 users × $29 = $580
+Month 3: 100 users × $35 avg = $3,500
+Month 6: 300 users × $40 avg = $12,000
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Marketing Channels
+1. **Twitter/X** - Trading results, bot updates
+2. **Reddit** - r/algotrading, r/cryptocurrency
+3. **Discord** - Trading communities
+4. **Product Hunt** - Launch day traffic
+5. **SEO** - "crypto trading bot", "automated trading"
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🛠 Tech Stack
 
-## Deploy on Vercel
+- **Frontend**: Next.js 16, Tailwind CSS
+- **Auth**: NextAuth 5
+- **Database**: Prisma + SQLite (dev) / PostgreSQL (prod)
+- **Payments**: Stripe
+- **Wallet**: wagmi + viem
+- **Bots**: Python (Polymarket, Hyperliquid, Solana)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📁 Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+├── src/
+│   ├── app/           # Next.js app router
+│   ├── components/    # React components
+│   └── lib/           # Utilities (auth, db, stripe)
+├── bots/              # Python trading bots
+├── prisma/            # Database schema
+└── public/            # Static assets
+```
+
+## 🚀 Deployment
+
+### Vercel (Recommended)
+```bash
+vercel
+```
+
+### Environment Variables (Production)
+- `DATABASE_URL` - PostgreSQL connection string
+- `AUTH_SECRET` - Random 32-char string
+- `AUTH_URL` - Your domain (https://...)
+- `STRIPE_SECRET_KEY` - Live key (sk_live_...)
+- `STRIPE_WEBHOOK_SECRET` - Webhook secret
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Publishable key
+
+## 📝 TODO
+
+- [ ] Bot runner API (execute Python bots)
+- [ ] Real-time trade updates (WebSocket)
+- [ ] Mobile app (React Native)
+- [ ] Referral system
+- [ ] API access for Elite users
