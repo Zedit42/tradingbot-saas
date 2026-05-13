@@ -1,0 +1,452 @@
+# ============================================
+# REUSABLE PR QUALITY CHECKS
+# ============================================
+# Kullanım: .github/workflows/pr.yml içinde:
+#   uses: zedit42/pr-checks/.github/workflows/pr-quality.yml@main
+#
+# Veya bu dosyayı projeye kopyala
+
+name: PR Quality & Security
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ============================================
+  # 🔒 SECURITY - SAST & Secrets
+  # ============================================
+  security-sast:
+    name: 🔒 SAST Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+      
+      - name: Run Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/typescript
+            p/react
+            p/nodejs
+          generateSarif: true
+      
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+
+  security-secrets:
+    name: 🔑 Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          extra_args: --only-verified
+      
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-deps:
+    name: 📦 Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: NPM Audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
+      
+      - name: Snyk Security Scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  security-custom:
+    name: 🛡️ Custom Security Rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for hardcoded secrets
+        run: |
+          echo "🔍 Scanning for hardcoded secrets..."
+          
+          PATTERNS=(
+            'sk-[a-zA-Z0-9]{20,}'                    # OpenAI keys
+            'sk_live_[a-zA-Z0-9]+'                   # Stripe live keys
+            'sk_test_[a-zA-Z0-9]+'                   # Stripe test keys
+            'ghp_[a-zA-Z0-9]{36}'                    # GitHub PAT
+            'github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}' # GitHub fine-grained PAT
+            'AKIA[0-9A-Z]{16}'                       # AWS Access Key
+            'xox[baprs]-[0-9a-zA-Z]{10,48}'          # Slack tokens
+            '[0-9]+-[0-9A-Za-z_]{32}\.apps\.googleusercontent\.com' # Google OAuth
+            'AIza[0-9A-Za-z\-_]{35}'                 # Google API Key
+            'ya29\.[0-9A-Za-z\-_]+'                  # Google OAuth Access Token
+            'mongodb(\+srv)?://[^:]+:[^@]+@'        # MongoDB connection strings
+            'postgres(ql)?://[^:]+:[^@]+@'          # PostgreSQL connection strings
+            'mysql://[^:]+:[^@]+@'                  # MySQL connection strings
+            'redis://[^:]+:[^@]+@'                  # Redis connection strings
+            'eyJ[a-zA-Z0-9]{10,}\.eyJ[a-zA-Z0-9]{10,}\.[a-zA-Z0-9_-]{10,}' # JWT tokens
+          )
+          
+          FOUND=0
+          for pattern in "${PATTERNS[@]}"; do
+            MATCHES=$(grep -rEn "$pattern" \
+              --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+              --include="*.json" --include="*.env*" --include="*.yml" --include="*.yaml" \
+              . 2>/dev/null | grep -v "node_modules" | grep -v ".pnpm" | grep -v "pnpm-lock" \
+              | grep -v "process\.env" | grep -v "example" | grep -v "\.test\." | grep -v "\.spec\." \
+              | grep -v "placeholder" | grep -v "your-.*-here" || true)
+            
+            if [ -n "$MATCHES" ]; then
+              echo "⚠️ Potential secret found:"
+              echo "$MATCHES"
+              FOUND=1
+            fi
+          done
+          
+          if [ $FOUND -eq 1 ]; then
+            echo "❌ Security check failed: Potential hardcoded secrets detected"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets found"
+
+      - name: Check for injection vulnerabilities
+        run: |
+          echo "🔍 Scanning for injection vulnerabilities..."
+          FAILED=0
+          
+          # SQL Injection
+          if grep -rEn 'prisma\.\$queryRaw\s*`[^`]*\$\{' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules; then
+            echo "❌ SQL injection: Use Prisma.sql for parameterized queries"
+            FAILED=1
+          fi
+          
+          # Command Injection
+          if grep -rEn 'exec\s*\(\s*[`"'"'"'][^`"'"'"']*\$\{' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules; then
+            echo "❌ Command injection: Never interpolate user input in exec()"
+            FAILED=1
+          fi
+          
+          if grep -rEn 'spawn\s*\([^,]+,\s*\[[^\]]*\$\{' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules; then
+            echo "❌ Command injection in spawn arguments"
+            FAILED=1
+          fi
+          
+          # eval() usage
+          if grep -rEn '\beval\s*\(' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | grep -v ".d.ts"; then
+            echo "❌ Security risk: eval() usage detected"
+            FAILED=1
+          fi
+          
+          # Function constructor (eval alternative)
+          if grep -rEn 'new\s+Function\s*\(' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules; then
+            echo "❌ Security risk: new Function() is equivalent to eval()"
+            FAILED=1
+          fi
+          
+          # XSS via innerHTML
+          if grep -rEn 'dangerouslySetInnerHTML' --include="*.tsx" . 2>/dev/null | grep -v node_modules | grep -v "sanitize" | grep -v "DOMPurify"; then
+            echo "⚠️ Warning: dangerouslySetInnerHTML without sanitization"
+          fi
+          
+          # Prototype pollution
+          if grep -rEn '\[.*\]\s*=' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -E "(req\.|body\.|query\.|params\.)" | grep -v node_modules; then
+            echo "⚠️ Warning: Potential prototype pollution - validate object keys"
+          fi
+          
+          if [ $FAILED -eq 1 ]; then
+            exit 1
+          fi
+          echo "✅ No injection vulnerabilities found"
+
+      - name: Check authentication patterns
+        run: |
+          echo "🔍 Checking authentication patterns..."
+          
+          # Check for missing auth middleware in API routes
+          API_ROUTES=$(find . -path "*/api/*" -name "*.ts" -o -path "*/api/*" -name "*.tsx" 2>/dev/null | grep -v node_modules | grep -v ".d.ts")
+          
+          for route in $API_ROUTES; do
+            if ! grep -qE "(getServerSession|auth\(|requireAuth|isAuthenticated|verifyToken)" "$route" 2>/dev/null; then
+              if ! grep -qE "(public|webhook|health|status)" "$route" 2>/dev/null; then
+                echo "⚠️ API route may be missing auth: $route"
+              fi
+            fi
+          done
+          
+          echo "✅ Auth pattern check complete"
+
+      - name: Check for sensitive data exposure
+        run: |
+          echo "🔍 Checking for sensitive data exposure..."
+          
+          # Check for console.log with sensitive data
+          if grep -rEn 'console\.(log|info|debug)\s*\([^)]*\b(password|secret|token|key|credential|apiKey|privateKey)\b' \
+            --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | grep -v ".test." | grep -v ".spec."; then
+            echo "⚠️ Warning: Logging potentially sensitive data"
+          fi
+          
+          # Check for sensitive fields in API responses
+          if grep -rEn 'return.*\b(password|passwordHash|secret|privateKey)\b' \
+            --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | grep -E "(api|route|handler)"; then
+            echo "⚠️ Warning: API might be exposing sensitive fields"
+          fi
+          
+          echo "✅ Sensitive data check complete"
+
+  # ============================================
+  # 📝 CODE QUALITY
+  # ============================================
+  typescript:
+    name: 📘 TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Generate types (Prisma etc)
+        run: |
+          if [ -f "prisma/schema.prisma" ]; then
+            pnpm prisma generate
+          fi
+      
+      - name: TypeScript check
+        run: pnpm tsc --noEmit
+      
+      - name: Check for 'any' usage
+        run: |
+          ANY_COUNT=$(grep -rE ': any\b|as any\b|<any>' --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | grep -v ".d.ts" | wc -l)
+          echo "Found $ANY_COUNT uses of 'any'"
+          if [ "$ANY_COUNT" -gt 10 ]; then
+            echo "⚠️ Consider reducing 'any' usage for better type safety"
+          fi
+
+  lint:
+    name: 🧹 ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: ESLint
+        run: pnpm lint
+      
+      - name: Check for TODO/FIXME in PR
+        run: |
+          TODOS=$(grep -rEn "(TODO|FIXME|HACK|XXX):" --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | wc -l)
+          echo "Found $TODOS TODO/FIXME comments"
+          if [ "$TODOS" -gt 5 ]; then
+            echo "⚠️ Consider addressing TODO/FIXME comments before merging"
+            grep -rEn "(TODO|FIXME|HACK|XXX):" --include="*.ts" --include="*.tsx" . 2>/dev/null | grep -v node_modules | head -10
+          fi
+
+  format:
+    name: 🎨 Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Prettier check
+        run: pnpm prettier --check "**/*.{ts,tsx,js,jsx,json,md}" || echo "::warning::Some files are not formatted"
+
+  # ============================================
+  # 🧪 TESTING
+  # ============================================
+  test-unit:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Run unit tests
+        run: |
+          if grep -q '"test"' package.json; then
+            pnpm test --coverage --passWithNoTests
+          else
+            echo "No test script found, skipping"
+          fi
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # 🏗️ BUILD
+  # ============================================
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    needs: [security-sast, security-secrets, security-custom, typescript, lint]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Generate Prisma
+        run: |
+          if [ -f "prisma/schema.prisma" ]; then
+            pnpm prisma generate
+          fi
+      
+      - name: Build
+        run: pnpm build
+        env:
+          DATABASE_URL: "file:./dev.db"
+          AUTH_SECRET: "mock-secret-for-build"
+          NEXTAUTH_URL: "http://localhost:3000"
+      
+      - name: Check bundle size
+        run: |
+          if [ -d ".next" ]; then
+            echo "📦 Bundle analysis:"
+            du -sh .next/
+            find .next/static -name "*.js" -exec du -h {} \; | sort -rh | head -10
+          fi
+
+  # ============================================
+  # 📊 PR SUMMARY
+  # ============================================
+  summary:
+    name: 📊 PR Summary
+    runs-on: ubuntu-latest
+    needs: [build, test-unit]
+    if: always()
+    steps:
+      - name: Create summary
+        run: |
+          echo "## PR Quality Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Security | ${{ needs.security-sast.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📘 TypeScript | ${{ needs.typescript.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧹 Lint | ${{ needs.lint.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests | ${{ needs.test-unit.result == 'success' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🏗️ Build | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # 🤖 AUTO-MERGE
+  # ============================================
+  auto-merge:
+    name: 🤖 Auto Merge
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: |
+      github.event_name == 'pull_request' && 
+      (github.actor == 'Zedit42' || github.actor == 'dependabot[bot]')
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Auto-merge PR
+        uses: pascalgn/automerge-action@v0.16.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_LABELS: ""
+          MERGE_METHOD: "squash"
+          MERGE_COMMIT_MESSAGE: "pull-request-title"
+          MERGE_DELETE_BRANCH: "true"
